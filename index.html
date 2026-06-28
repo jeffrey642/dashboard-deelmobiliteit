@@ -91,7 +91,7 @@
 
     /* ── UPLOAD SCREEN ── */
     #uploadScreen {
-      display: flex;
+      display: none;
       flex-direction: column;
       align-items: center;
       justify-content: center;
@@ -205,7 +205,7 @@
     }
 
     /* ── DASHBOARD ── */
-    #dashboard { display: none; }
+    #dashboard { display: block; }
 
     .dash-content {
       padding: 1.5rem 2rem 2rem;
@@ -631,7 +631,7 @@
     </div>
   </div>
   <div class="header-info">
-    <span class="header-period-badge" id="headerBadge">Geen data geladen</span>
+    <span class="header-period-badge" id="updateBadge" style="background:rgba(0,186,255,0.12);border-color:rgba(0,186,255,0.3);color:var(--primary)"></span>
   </div>
 </header>
 
@@ -674,6 +674,13 @@
 <div id="dashboard">
 <div class="dash-content">
 
+  <!-- LOADING BANNER -->
+  <div id="loadingBanner" style="background:var(--primary-light);border:1px solid rgba(0,186,255,0.25);border-radius:10px;padding:0.7rem 1.2rem;margin-bottom:0.5rem;color:var(--primary);font-size:0.85rem;font-weight:600;display:flex;align-items:center;gap:0.6rem;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="animation:spin 1s linear infinite"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+    Data wordt geladen...
+  </div>
+  <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+
   <!-- FILTER BAR -->
   <div class="filter-bar">
     <div class="filter-group">
@@ -685,11 +692,7 @@
       <select id="selPeriode"></select>
     </div>
     <div class="flex-spacer"></div>
-    <div class="data-status">
-      <div class="status-dot"></div>
-      <span id="statusText">Data geladen</span>
-    </div>
-    <button class="btn-reload" onclick="resetApp()">↺ Nieuw bestand</button>
+
   </div>
 
   <!-- KPI CARDS -->
@@ -747,20 +750,20 @@
     <div class="card">
       <div class="card-header">
         <div>
-          <div class="card-title">LEKP 2030 voortgang</div>
-          <div class="card-sub">% van doelstelling bereikt (obv dec 2024)</div>
+          <div class="card-title">Top 10: meeste deelwagens</div>
+          <div class="card-sub">Gemeenten met het hoogste absoluut aantal</div>
         </div>
       </div>
-      <div class="lekp-list" id="lekpBars"></div>
+      <div class="chart-wrap"><canvas id="topDeelwagensChart"></canvas></div>
     </div>
     <div class="card">
       <div class="card-header">
         <div>
-          <div class="card-title">Top 10: grootste gap naar 2030</div>
-          <div class="card-sub">Extra deelwagens nog nodig</div>
+          <div class="card-title">Top 10: meeste deelwagens per 1.000 inwoners</div>
+          <div class="card-sub">Gemeenten met hoogste dichtheid</div>
         </div>
       </div>
-      <div class="chart-wrap"><canvas id="gapChart"></canvas></div>
+      <div class="chart-wrap"><canvas id="per1000Chart"></canvas></div>
     </div>
   </div>
 
@@ -844,24 +847,31 @@
 // AUTO-LOAD CONFIG
 // ═══════════════════════════════════════════════════
 const AUTO_DATA_URL = 'https://raw.githubusercontent.com/jeffrey642/dashboard-deelmobiliteit/main/LEKP_AANTAL%20DEELWAGENS%20PER%20GEMEENTE_VANAF%20JUNI%202025%20(2).xlsx';
+const LAATSTE_UPDATE = 'December 2025';
 
 async function autoLoad() {
+  const banner = document.getElementById('loadingBanner');
   try {
     const resp = await fetch(AUTO_DATA_URL);
-    if (!resp.ok) throw new Error('Bestand niet bereikbaar (status ' + resp.status + ')');
+    if (!resp.ok) throw new Error('status ' + resp.status);
     const buffer = await resp.arrayBuffer();
     const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' });
     parseOverzicht(wb);
     parseKerncijfers(wb);
-    document.getElementById('statusText').textContent = `Automatisch geladen · ${gemeenten.length} gemeenten`;
-    document.getElementById('headerBadge').textContent = PERIODS[state.periodeIdx].label + ' · Heel Vlaanderen';
     buildFilters();
-    showDashboard();
+    if (banner) banner.remove();
+    state.periodeIdx = PERIODS.length - 1;
+    state.provincie  = '';
+    drawTrendChart();
+    refresh();
   } catch (err) {
     console.warn('Auto-load mislukt:', err);
-    document.getElementById('autoLoadState').style.display = 'none';
-    document.getElementById('manualUpload').style.display  = 'block';
-    document.getElementById('uploadNote').textContent = 'Automatisch laden mislukt. Upload het bestand handmatig.';
+    if (banner) {
+      banner.style.background = '#fef2f2';
+      banner.style.border = '1px solid #fca5a5';
+      banner.style.color = '#dc2626';
+      banner.innerHTML = '⚠ Kon data niet laden. <a href="#" onclick="location.reload()" style="color:inherit;font-weight:700">Ververs de pagina</a> om opnieuw te proberen.';
+    }
   }
 }
 
@@ -938,7 +948,7 @@ function loadFile(file) {
       parseOverzicht(wb);
       parseKerncijfers(wb);
       document.getElementById('statusText').textContent = `${file.name} · ${gemeenten.length} gemeenten`;
-      document.getElementById('headerBadge').textContent = PERIODS[state.periodeIdx].label + ' · Heel Vlaanderen';
+  
       buildFilters();
       showDashboard();
     } catch(err) {
@@ -1037,8 +1047,6 @@ function showDashboard() {
   state.periodeIdx = PERIODS.length - 1;
   state.provincie  = '';
   drawTrendChart();
-  drawGapChart();
-  drawLekpBars();
   refresh();
 }
 
@@ -1046,9 +1054,10 @@ function refresh() {
   updateKPIs();
   updateProvChart();
   renderTable();
-  document.getElementById('headerBadge').textContent =
-    PERIODS[state.periodeIdx].label + ' · ' + (state.provincie || 'Heel Vlaanderen');
+  drawTopDeelwagensChart();
+  drawPer1000Chart();
   document.getElementById('provSub').textContent = PERIODS[state.periodeIdx].label;
+  document.getElementById('updateBadge').textContent = 'Laatste update: ' + LAATSTE_UPDATE;
 }
 
 function filtered() {
@@ -1214,64 +1223,24 @@ function updateProvChart() {
 // ═══════════════════════════════════════════════════
 // LEKP 2030 BARS
 // ═══════════════════════════════════════════════════
-function drawLekpBars() {
-  const container = document.getElementById('lekpBars');
-  const DEC24_IDX = 5; // Dec 2024
-
-  const regions = [
-    { name: 'Heel Vlaanderen', filter: null },
-    ...PROV_FULL.map(p => ({ name: p, filter: p }))
-  ];
-
-  container.innerHTML = '';
-
-  regions.forEach(({ name, filter }) => {
-    const data    = filter ? gemeenten.filter(g => g.provincie === filter) : gemeenten;
-    const current = data.reduce((s, g) => s + g.perioden[DEC24_IDX].total, 0);
-    const needed  = data.reduce((s, g) => s + g.nodig2030, 0);
-    if (needed === 0) return;
-
-    const pctRaw   = Math.min(current / needed * 100, 100);
-    const pct      = Math.round(pctRaw);
-    const pctTxt   = pctRaw.toFixed(2).replace('.', ',');
-    const extra    = data.reduce((s, g) => s + Math.max(0, g.extraNodig2030), 0);
-    const color    = pctRaw >= 80 ? 'var(--success)' : pctRaw >= 55 ? 'var(--primary)' : pctRaw >= 35 ? 'var(--warning)' : 'var(--danger)';
-
-    container.innerHTML += `
-      <div class="lekp-item">
-        <div class="lekp-row">
-          <span class="lekp-name">${name}</span>
-          <span class="lekp-pct" style="color:${color}">${pctTxt}%</span>
-        </div>
-        <div class="bar-bg">
-          <div class="bar-fill" style="width:${pct}%;background:${color}"></div>
-        </div>
-        <div class="lekp-detail">
-          ${current.toLocaleString('nl-BE')} van ${needed.toLocaleString('nl-BE')} · nog <strong>${extra.toLocaleString('nl-BE')}</strong> nodig
-        </div>
-      </div>`;
-  });
-}
-
-// ═══════════════════════════════════════════════════
-// GAP CHART
-// ═══════════════════════════════════════════════════
-function drawGapChart() {
-  const top10 = gemeenten
-    .filter(g => g.extraNodig2030 > 0)
-    .sort((a, b) => b.extraNodig2030 - a.extraNodig2030)
+function drawTopDeelwagensChart() {
+  const pi   = state.periodeIdx;
+  const data = filtered();
+  const top10 = data
+    .filter(g => g.perioden[pi].total > 0)
+    .sort((a, b) => b.perioden[pi].total - a.perioden[pi].total)
     .slice(0, 10);
 
-  const ctx = document.getElementById('gapChart').getContext('2d');
-  if (charts.gap) charts.gap.destroy();
+  const ctx = document.getElementById('topDeelwagensChart').getContext('2d');
+  if (charts.topDeel) charts.topDeel.destroy();
 
-  charts.gap = new Chart(ctx, {
+  charts.topDeel = new Chart(ctx, {
     type: 'bar',
     data: {
       labels: top10.map(g => g.gemeente),
       datasets: [{
-        label: 'Extra deelwagens nodig',
-        data:  top10.map(g => g.extraNodig2030),
+        label: 'Deelwagens',
+        data:  top10.map(g => g.perioden[pi].total),
         backgroundColor: top10.map(g => PROV_COLORS[g.provincie] || '#00BAFF'),
         borderRadius: 4,
       }]
@@ -1284,7 +1253,53 @@ function drawGapChart() {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: c => ` ${c.raw.toLocaleString('nl-BE')} extra nodig`,
+            label: c => ` ${c.raw.toLocaleString('nl-BE')} deelwagens`,
+            afterLabel: c => ` ${top10[c.dataIndex].provincie}`
+          }
+        }
+      },
+      scales: {
+        x: { beginAtZero: true, grid: { color: '#f0f0f0' }, ticks: { font: { size: 11 } } },
+        y: { grid: { display: false }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════
+// PER 1000 CHART
+// ═══════════════════════════════════════════════════
+function drawPer1000Chart() {
+  const pi   = state.periodeIdx;
+  const data = filtered();
+  const top10 = data
+    .filter(g => g.perioden[pi].per1000 > 0)
+    .sort((a, b) => b.perioden[pi].per1000 - a.perioden[pi].per1000)
+    .slice(0, 10);
+
+  const ctx = document.getElementById('per1000Chart').getContext('2d');
+  if (charts.per1000) charts.per1000.destroy();
+
+  charts.per1000 = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: top10.map(g => g.gemeente),
+      datasets: [{
+        label: 'Deelwagens per 1.000 inwoners',
+        data:  top10.map(g => g.perioden[pi].per1000),
+        backgroundColor: top10.map(g => PROV_COLORS[g.provincie] || '#00BAFF'),
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: c => ` ${c.raw.toFixed(1).replace('.', ',')} per 1.000 inwoners`,
             afterLabel: c => ` ${top10[c.dataIndex].provincie}`
           }
         }
