@@ -167,6 +167,43 @@
       margin-top: 1rem;
     }
 
+    /* ── LOADING STATE ── */
+    .loading-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 0;
+    }
+
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 4px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-txt { font-size: 0.88rem; color: var(--gray); }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin: 1.25rem 0;
+      color: var(--gray);
+      font-size: 0.78rem;
+    }
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
     /* ── DASHBOARD ── */
     #dashboard { display: none; }
 
@@ -520,19 +557,28 @@
         <line x1="12" y1="3" x2="12" y2="15"/>
       </svg>
     </div>
-    <h2>Laad deelmobiliteitsdata</h2>
-    <p>Upload het LEKP Excel-bestand met de deelwagensdata per gemeente. Elke keer als je nieuwe data hebt, laad je gewoon een nieuw bestand.</p>
+    <h2>Deelmobiliteit Dashboard</h2>
+    <p>De data wordt automatisch geladen. Even geduld...</p>
 
-    <div class="drop-zone" id="dropZone">
-      <p><strong>Sleep het Excel-bestand hier naartoe</strong></p>
-      <p style="margin-top:0.4rem">of klik op de knop hieronder</p>
+    <!-- Auto-load status -->
+    <div class="loading-state" id="autoLoadState">
+      <div class="spinner"></div>
+      <span class="loading-txt" id="autoLoadTxt">Data ophalen van GitHub...</span>
     </div>
 
-    <button class="btn-primary" onclick="document.getElementById('fileInput').click()">
-      📂&nbsp; Kies Excel-bestand (.xlsx)
-    </button>
+    <!-- Fallback: manual upload -->
+    <div id="manualUpload" style="display:none">
+      <div class="divider">of laad handmatig een bestand</div>
+      <div class="drop-zone" id="dropZone">
+        <p><strong>Sleep het Excel-bestand hier naartoe</strong></p>
+        <p style="margin-top:0.4rem">of klik op de knop hieronder</p>
+      </div>
+      <button class="btn-primary" onclick="document.getElementById('fileInput').click()">
+        📂&nbsp; Kies Excel-bestand (.xlsx)
+      </button>
+    </div>
     <input type="file" id="fileInput" accept=".xlsx,.xls">
-    <p class="upload-note">Verwacht bestandsformaat: LEKP_AANTAL DEELWAGENS PER GEMEENTE...</p>
+    <p class="upload-note" id="uploadNote">Automatisch ophalen van de laatste data...</p>
   </div>
 </div>
 
@@ -671,6 +717,33 @@
 
 <script>
 // ═══════════════════════════════════════════════════
+// AUTO-LOAD CONFIG
+// ═══════════════════════════════════════════════════
+const AUTO_DATA_URL = 'https://raw.githubusercontent.com/jeffrey642/dashboard-deelmobiliteit/main/LEKP_AANTAL%20DEELWAGENS%20PER%20GEMEENTE_VANAF%20JUNI%202025%20(2).xlsx';
+
+async function autoLoad() {
+  try {
+    const resp = await fetch(AUTO_DATA_URL);
+    if (!resp.ok) throw new Error('Bestand niet bereikbaar (status ' + resp.status + ')');
+    const buffer = await resp.arrayBuffer();
+    const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+    parseOverzicht(wb);
+    parseKerncijfers(wb);
+    document.getElementById('statusText').textContent = `Automatisch geladen · ${gemeenten.length} gemeenten`;
+    document.getElementById('headerBadge').textContent = PERIODS[state.periodeIdx].label + ' · Heel Vlaanderen';
+    buildFilters();
+    showDashboard();
+  } catch (err) {
+    console.warn('Auto-load mislukt:', err);
+    document.getElementById('autoLoadState').style.display = 'none';
+    document.getElementById('manualUpload').style.display  = 'block';
+    document.getElementById('uploadNote').textContent = 'Automatisch laden mislukt. Upload het bestand handmatig.';
+  }
+}
+
+window.addEventListener('load', autoLoad);
+
+// ═══════════════════════════════════════════════════
 // COLUMN MAP (0-indexed, based on OVERZICHT sheet)
 // ═══════════════════════════════════════════════════
 const PERIODS = [
@@ -720,9 +793,12 @@ dropZone.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
 
 function resetApp() {
-  document.getElementById('uploadScreen').style.display = 'flex';
-  document.getElementById('dashboard').style.display    = 'none';
-  document.getElementById('headerBadge').textContent    = 'Geen data geladen';
+  document.getElementById('uploadScreen').style.display  = 'flex';
+  document.getElementById('dashboard').style.display     = 'none';
+  document.getElementById('headerBadge').textContent     = 'Geen data geladen';
+  document.getElementById('autoLoadState').style.display = 'none';
+  document.getElementById('manualUpload').style.display  = 'block';
+  document.getElementById('uploadNote').textContent      = 'Upload het nieuwe Excel-bestand hieronder.';
   fileInput.value = '';
   gemeenten = []; kerncijfers = {};
   Object.values(charts).forEach(c => c && c.destroy());
