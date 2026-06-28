@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deelmobiliteit Dashboard – Way To Go</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --primary: #00BAFF;
+      --primary-dark: #0099d6;
+      --primary-light: rgba(0,186,255,0.1);
+      --dark: #35322c;
+      --dark2: #151515;
+      --light: #f4f6f9;
+      --border: #e2e4e8;
+      --gray: #6b7280;
+      --white: #ffffff;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--light);
+      color: var(--dark2);
+      min-height: 100vh;
+      font-size: 14px;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      background: var(--dark);
+      color: white;
+      padding: 0 2rem;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+    }
+
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+    }
+
+    .logo-circle {
+      width: 36px;
+      height: 36px;
+      background: var(--primary);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .logo-circle svg { width: 20px; height: 20px; fill: white; }
+
+    .brand-text { line-height: 1.2; }
+    .brand-name { font-size: 1rem; font-weight: 800; color: white; letter-spacing: -0.01em; }
+    .brand-sub  { font-size: 0.7rem; color: var(--primary); font-weight: 500; }
+
+    .header-info {
+      font-size: 0.78rem;
+      color: rgba(255,255,255,0.45);
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .header-period-badge {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 999px;
+      padding: 0.2rem 0.75rem;
+      font-size: 0.75rem;
+      color: rgba(255,255,255,0.7);
+    }
+
+    /* ── UPLOAD SCREEN ── */
+    #uploadScreen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: calc(100vh - 60px);
+      padding: 2rem;
+    }
+
+    .upload-card {
+      background: white;
+      border-radius: 20px;
+      padding: 3rem 2.5rem;
+      max-width: 500px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.08);
+    }
+
+    .upload-icon-wrap {
+      width: 76px;
+      height: 76px;
+      background: var(--primary-light);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1.5rem;
+    }
+
+    .upload-icon-wrap svg { width: 38px; height: 38px; stroke: var(--primary); }
+
+    .upload-card h2 { font-size: 1.4rem; font-weight: 800; margin-bottom: 0.6rem; }
+    .upload-card p  { color: var(--gray); font-size: 0.88rem; line-height: 1.6; margin-bottom: 1.75rem; }
+
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 1.75rem 1.5rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 1rem;
+      background: var(--light);
+    }
+
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--primary);
+      background: var(--primary-light);
+    }
+
+    .drop-zone p { font-size: 0.85rem; color: var(--gray); margin: 0; }
+    .drop-zone strong { color: var(--primary); }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.8rem 1.5rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      width: 100%;
+      letter-spacing: 0.01em;
+    }
+
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-primary:active { transform: scale(0.98); }
+    #fileInput { display: none; }
+
+    .upload-note {
+      font-size: 0.75rem;
+      color: var(--gray);
+      margin-top: 1rem;
+    }
+
+    /* ── LOADING STATE ── */
+    .loading-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 0;
+    }
+
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 4px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-txt { font-size: 0.88rem; color: var(--gray); }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin: 1.25rem 0;
+      color: var(--gray);
+      font-size: 0.78rem;
+    }
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── DASHBOARD ── */
+    #dashboard { display: none; }
+
+    .dash-content {
+      padding: 1.5rem 2rem 2rem;
+      max-width: 1440px;
+      margin: 0 auto;
+    }
+
+    /* ── FILTER BAR ── */
+    .filter-bar {
+      background: white;
+      border-radius: var(--radius);
+      padding: 0.85rem 1.25rem;
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 1.25rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    }
+
+    .filter-group { display: flex; flex-direction: column; gap: 0.2rem; }
+
+    .filter-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--gray);
+    }
+
+    .filter-bar select, .filter-bar input[type="text"] {
+      border: 1.5px solid var(--border);
+      border-radius: 7px;
+      padding: 0.45rem 0.7rem;
+      font-size: 0.84rem;
+      color: var(--dark2);
+      background: white;
+      outline: none;
+      transition: border-color 0.15s;
+      font-family: inherit;
+    }
+
+    .filter-bar select:focus, .filter-bar input[type="text"]:focus {
+      border-color: var(--primary);
+    }
+
+    .flex-spacer { flex: 1; }
+
+    .data-status {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.78rem;
+      color: var(--gray);
+    }
+
+    .status-dot {
+      width: 8px; height: 8px;
+      background: var(--success);
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .btn-reload {
+      background: transparent;
+      border: 1.5px solid var(--border);
+      color: var(--gray);
+      padding: 0.45rem 0.9rem;
+      border-radius: 7px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: inherit;
+    }
+
+    .btn-reload:hover { border-color: var(--primary); color: var(--primary); }
+
+    /* ── KPI CARDS ── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .kpi-card {
+      background: white;
+      border-radius: var(--radius);
+      padding: 1.25rem 1.4rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+      border-top: 3px solid var(--primary);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .kpi-card::before {
+      content: '';
+      position: absolute;
+      top: -24px; right: -24px;
+      width: 88px; height: 88px;
+      background: var(--primary-light);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .kpi-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--gray);
+      margin-bottom: 0.5rem;
+    }
+
+    .kpi-value {
+      font-size: 2.1rem;
+      font-weight: 900;
+      color: var(--dark2);
+      line-height: 1;
+      margin-bottom: 0.3rem;
+      letter-spacing: -0.02em;
+    }
+
+    .kpi-sub { font-size: 0.75rem; color: var(--gray); }
+
+    .kpi-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 0.18rem 0.5rem;
+      border-radius: 999px;
+      margin-top: 0.4rem;
+    }
+
+    .badge-up   { background: rgba(16,185,129,0.1); color: var(--success); }
+    .badge-down { background: rgba(239,68,68,0.1);  color: var(--danger);  }
+    .badge-flat { background: rgba(107,114,128,0.1); color: var(--gray);   }
+
+    /* ── CHART GRID ── */
+    .chart-row-1 {
+      display: grid;
+      grid-template-columns: 5fr 3fr;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .chart-row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .card {
+      background: white;
+      border-radius: var(--radius);
+      padding: 1.4rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 1.1rem;
+    }
+
+    .card-title { font-size: 0.88rem; font-weight: 700; color: var(--dark2); }
+    .card-sub   { font-size: 0.72rem; color: var(--gray); margin-top: 0.2rem; }
+
+    .chart-wrap { position: relative; height: 250px; }
+
+    /* ── LEKP BARS ── */
+    .lekp-list { display: flex; flex-direction: column; gap: 0.85rem; }
+
+    .lekp-item {}
+
+    .lekp-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 0.3rem;
+    }
+
+    .lekp-name { font-size: 0.82rem; font-weight: 600; }
+    .lekp-pct  { font-size: 0.82rem; font-weight: 800; color: var(--primary); }
+
+    .bar-bg {
+      height: 8px;
+      background: var(--border);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .lekp-detail { font-size: 0.7rem; color: var(--gray); margin-top: 0.2rem; }
+
+    /* ── MUNICIPALITY TABLE ── */
+    .table-card {
+      background: white;
+      border-radius: var(--radius);
+      padding: 1.4rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+      margin-bottom: 1.5rem;
+    }
+
+    .table-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+
+    .table-search {
+      border: 1.5px solid var(--border);
+      border-radius: 7px;
+      padding: 0.45rem 0.7rem;
+      font-size: 0.84rem;
+      outline: none;
+      transition: border-color 0.15s;
+      font-family: inherit;
+      width: 220px;
+    }
+
+    .table-search:focus { border-color: var(--primary); }
+
+    .table-wrapper {
+      overflow-x: auto;
+      max-height: 420px;
+      overflow-y: auto;
+    }
+
+    table { width: 100%; border-collapse: collapse; }
+
+    thead th {
+      position: sticky;
+      top: 0;
+      background: var(--light);
+      padding: 0.6rem 0.9rem;
+      text-align: left;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--gray);
+      border-bottom: 2px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+      transition: color 0.15s;
+    }
+
+    thead th:hover { color: var(--primary); }
+    thead th.sort-active { color: var(--primary); }
+
+    thead th::after { content: ' '; }
+    thead th.sort-asc::after  { content: ' ↑'; }
+    thead th.sort-desc::after { content: ' ↓'; }
+
+    tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(0,186,255,0.03); }
+
+    tbody td { padding: 0.6rem 0.9rem; }
+
+    .td-gem  { font-weight: 700; font-size: 0.84rem; }
+    .td-prov { color: var(--gray); font-size: 0.78rem; }
+    .td-num  { font-variant-numeric: tabular-nums; }
+
+    .mini-bar-wrap { display: flex; align-items: center; gap: 0.4rem; }
+    .mini-bar { flex: 1; height: 6px; background: var(--border); border-radius: 999px; overflow: hidden; min-width: 60px; }
+    .mini-fill { height: 100%; border-radius: 999px; }
+    .mini-pct  { font-size: 0.72rem; font-weight: 700; min-width: 30px; text-align: right; }
+
+    .fill-green  { background: var(--success); }
+    .fill-blue   { background: var(--primary); }
+    .fill-orange { background: var(--warning); }
+    .fill-red    { background: var(--danger);  }
+
+    .table-count { font-size: 0.72rem; color: var(--gray); margin-top: 0.6rem; }
+
+    /* ── FOOTER ── */
+    footer {
+      background: white;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      padding: 1.25rem;
+      font-size: 0.75rem;
+      color: var(--gray);
+    }
+
+    footer a { color: var(--primary); text-decoration: none; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 1100px) {
+      .chart-row-1 { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 900px) {
+      .kpi-grid      { grid-template-columns: repeat(2, 1fr); }
+      .chart-row-2   { grid-template-columns: 1fr; }
+      .dash-content  { padding: 1rem; }
+    }
+
+    @media (max-width: 540px) {
+      .kpi-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════ HEADER ══════════════ -->
+<header class="header">
+  <div class="header-brand">
+    <div class="logo-circle">
+      <!-- Simplified Way To Go arrow icon -->
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 12h12M13 8l4 4-4 4" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <circle cx="19" cy="12" r="2" fill="white"/>
+      </svg>
+    </div>
+    <div class="brand-text">
+      <div class="brand-name">Way To Go</div>
+      <div class="brand-sub">Deelmobiliteit Dashboard</div>
+    </div>
+  </div>
+  <div class="header-info">
+    <span class="header-period-badge" id="headerBadge">Geen data geladen</span>
+  </div>
+</header>
+
+<!-- ══════════════ UPLOAD SCREEN ══════════════ -->
+<div id="uploadScreen">
+  <div class="upload-card">
+    <div class="upload-icon-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+    </div>
+    <h2>Deelmobiliteit Dashboard</h2>
+    <p>De data wordt automatisch geladen. Even geduld...</p>
+
+    <!-- Auto-load status -->
+    <div class="loading-state" id="autoLoadState">
+      <div class="spinner"></div>
+      <span class="loading-txt" id="autoLoadTxt">Data ophalen van GitHub...</span>
+    </div>
+
+    <!-- Fallback: manual upload -->
+    <div id="manualUpload" style="display:none">
+      <div class="divider">of laad handmatig een bestand</div>
+      <div class="drop-zone" id="dropZone">
+        <p><strong>Sleep het Excel-bestand hier naartoe</strong></p>
+        <p style="margin-top:0.4rem">of klik op de knop hieronder</p>
+      </div>
+      <button class="btn-primary" onclick="document.getElementById('fileInput').click()">
+        📂&nbsp; Kies Excel-bestand (.xlsx)
+      </button>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
+    <p class="upload-note" id="uploadNote">Automatisch ophalen van de laatste data...</p>
+  </div>
+</div>
+
+<!-- ══════════════ DASHBOARD ══════════════ -->
+<div id="dashboard">
+<div class="dash-content">
+
+  <!-- FILTER BAR -->
+  <div class="filter-bar">
+    <div class="filter-group">
+      <span class="filter-label">Provincie</span>
+      <select id="selProvincie"><option value="">Heel Vlaanderen</option></select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Periode</span>
+      <select id="selPeriode"></select>
+    </div>
+    <div class="flex-spacer"></div>
+    <div class="data-status">
+      <div class="status-dot"></div>
+      <span id="statusText">Data geladen</span>
+    </div>
+    <button class="btn-reload" onclick="resetApp()">↺ Nieuw bestand</button>
+  </div>
+
+  <!-- KPI CARDS -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">Totaal deelwagens</div>
+      <div class="kpi-value" id="kv1">–</div>
+      <div class="kpi-sub" id="ks1">geselecteerde regio &amp; periode</div>
+      <div id="kb1"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Aandeel elektrisch</div>
+      <div class="kpi-value" id="kv2">–</div>
+      <div class="kpi-sub">van alle deelwagens</div>
+      <div id="kb2"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Gemeenten met deelwagen</div>
+      <div class="kpi-value" id="kv3">–</div>
+      <div class="kpi-sub" id="ks3">van alle gemeenten</div>
+      <div id="kb3"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Dichtheid</div>
+      <div class="kpi-value" id="kv4">–</div>
+      <div class="kpi-sub">deelwagens per 1.000 inwoners</div>
+      <div id="kb4"></div>
+    </div>
+  </div>
+
+  <!-- CHARTS ROW 1: Trend + Provincie -->
+  <div class="chart-row-1">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Evolutie deelwagens in de tijd</div>
+          <div class="card-sub" id="trendSub">Totaal &amp; elektrisch · Vlaanderen</div>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Vergelijking per provincie</div>
+          <div class="card-sub" id="provSub">Geselecteerde periode</div>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="provChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- CHARTS ROW 2: LEKP + Gap -->
+  <div class="chart-row-2">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">LEKP 2030 voortgang</div>
+          <div class="card-sub">% van doelstelling bereikt (obv dec 2024)</div>
+        </div>
+      </div>
+      <div class="lekp-list" id="lekpBars"></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Top 10: grootste gap naar 2030</div>
+          <div class="card-sub">Extra deelwagens nog nodig</div>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="gapChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- MUNICIPALITY TABLE -->
+  <div class="table-card">
+    <div class="table-header">
+      <div>
+        <div class="card-title">Overzicht per gemeente</div>
+        <div class="card-sub">Klik op kolomhoofd om te sorteren</div>
+      </div>
+      <input type="text" class="table-search" id="tableSearch" placeholder="🔍  Zoek gemeente...">
+    </div>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="sortBy('gemeente')">Gemeente</th>
+            <th onclick="sortBy('provincie')">Provincie</th>
+            <th onclick="sortBy('inwoners')">Inwoners</th>
+            <th onclick="sortBy('deelwagens')">Deelwagens</th>
+            <th onclick="sortBy('eWagens')">E-Deelwagens</th>
+            <th onclick="sortBy('per1000')">Per 1.000</th>
+            <th onclick="sortBy('nodig2030')">Doel 2030</th>
+            <th onclick="sortBy('gap2030')">Gap 2030</th>
+            <th>Voortgang</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+    <div class="table-count" id="tableCount"></div>
+  </div>
+
+</div><!-- /dash-content -->
+</div><!-- /dashboard -->
+
+<footer>
+  <strong>Way To Go</strong> – Jouw wegwijzer in deelmobiliteit &nbsp;·&nbsp;
+  Data: LEKP Rapportage Deelwagens per Gemeente, Vlaanderen &nbsp;·&nbsp;
+  <a href="https://www.waytogo.be" target="_blank">waytogo.be</a>
+</footer>
+
+<script>
+// ═══════════════════════════════════════════════════
+// AUTO-LOAD CONFIG
+// ═══════════════════════════════════════════════════
+const AUTO_DATA_URL = 'https://raw.githubusercontent.com/jeffrey642/dashboard-deelmobiliteit/main/LEKP_AANTAL%20DEELWAGENS%20PER%20GEMEENTE_VANAF%20JUNI%202025%20(2).xlsx';
+
+async function autoLoad() {
+  try {
+    const resp = await fetch(AUTO_DATA_URL);
+    if (!resp.ok) throw new Error('Bestand niet bereikbaar (status ' + resp.status + ')');
+    const buffer = await resp.arrayBuffer();
+    const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+    parseOverzicht(wb);
+    parseKerncijfers(wb);
+    document.getElementById('statusText').textContent = `Automatisch geladen · ${gemeenten.length} gemeenten`;
+    document.getElementById('headerBadge').textContent = PERIODS[state.periodeIdx].label + ' · Heel Vlaanderen';
+    buildFilters();
+    showDashboard();
+  } catch (err) {
+    console.warn('Auto-load mislukt:', err);
+    document.getElementById('autoLoadState').style.display = 'none';
+    document.getElementById('manualUpload').style.display  = 'block';
+    document.getElementById('uploadNote').textContent = 'Automatisch laden mislukt. Upload het bestand handmatig.';
+  }
+}
+
+window.addEventListener('load', autoLoad);
+
+// ═══════════════════════════════════════════════════
+// COLUMN MAP (0-indexed, based on OVERZICHT sheet)
+// ═══════════════════════════════════════════════════
+const PERIODS = [
+  { label: 'Jan 2022',  iT: 7,  iE: 8,  iP: 9  },
+  { label: 'Okt 2022',  iT: 10, iE: 11, iP: 12 },
+  { label: 'Jun 2023',  iT: 13, iE: 14, iP: 15 },
+  { label: 'Dec 2023',  iT: 23, iE: 24, iP: 25 },
+  { label: 'Jun 2024',  iT: 27, iE: 28, iP: 29 },
+  { label: 'Dec 2024',  iT: 31, iE: 32, iP: 33 },
+  { label: 'Jun 2025',  iT: 35, iE: 36, iP: 37 },
+  { label: 'Dec 2025',  iT: 41, iE: 42, iP: 43 },
+];
+
+const PROV_COLORS = {
+  'Antwerpen':       '#00BAFF',
+  'Limburg':         '#0077b6',
+  'Oost-Vlaanderen': '#00b4d8',
+  'Vlaams-Brabant':  '#48cae4',
+  'West-Vlaanderen': '#023e8a',
+};
+
+const PROV_FULL  = ['Antwerpen','Limburg','Oost-Vlaanderen','Vlaams-Brabant','West-Vlaanderen'];
+const PROV_SHORT = ['Antwerpen','Limburg','Oost-Vl.','Vl.-Brabant','West-Vl.'];
+
+// ═══════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════
+let gemeenten    = [];
+let kerncijfers  = {};
+let charts       = {};
+let state = { provincie: '', periodeIdx: PERIODS.length - 1 };
+let tableSort    = { col: 'deelwagens', asc: false };
+
+// ═══════════════════════════════════════════════════
+// FILE UPLOAD
+// ═══════════════════════════════════════════════════
+const dropZone  = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', ()=> dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
+
+function resetApp() {
+  document.getElementById('uploadScreen').style.display  = 'flex';
+  document.getElementById('dashboard').style.display     = 'none';
+  document.getElementById('headerBadge').textContent     = 'Geen data geladen';
+  document.getElementById('autoLoadState').style.display = 'none';
+  document.getElementById('manualUpload').style.display  = 'block';
+  document.getElementById('uploadNote').textContent      = 'Upload het nieuwe Excel-bestand hieronder.';
+  fileInput.value = '';
+  gemeenten = []; kerncijfers = {};
+  Object.values(charts).forEach(c => c && c.destroy());
+  charts = {};
+}
+
+function loadFile(file) {
+  document.getElementById('statusText').textContent = `Laden: ${file.name}…`;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
+      parseOverzicht(wb);
+      parseKerncijfers(wb);
+      document.getElementById('statusText').textContent = `${file.name} · ${gemeenten.length} gemeenten`;
+      document.getElementById('headerBadge').textContent = PERIODS[state.periodeIdx].label + ' · Heel Vlaanderen';
+      buildFilters();
+      showDashboard();
+    } catch(err) {
+      alert('Fout bij verwerken van het bestand:\n' + err.message);
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ═══════════════════════════════════════════════════
+// PARSE
+// ═══════════════════════════════════════════════════
+function n(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  if (typeof v === 'number') return v;
+  if (typeof v === 'object') return 0;
+  const s = String(v).replace(/\s/g,'').replace(/\./g,'').replace(',','.');
+  const f = parseFloat(s);
+  return isNaN(f) ? 0 : f;
+}
+
+function parseOverzicht(wb) {
+  const sheet = wb.Sheets['OVERZICHT'];
+  if (!sheet) throw new Error('Tabblad "OVERZICHT" niet gevonden in het bestand.');
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+  gemeenten = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || !r[0] || typeof r[0] !== 'string' || r[0].trim() === '') continue;
+    gemeenten.push({
+      gemeente:     r[0],
+      provincie:    r[1] || '',
+      nis:          String(r[2] || ''),
+      inwoners: {
+        2022: n(r[3]), 2023: n(r[4]), 2024: n(r[5]), 2025: n(r[6])
+      },
+      perioden: PERIODS.map(p => ({
+        label:  p.label,
+        total:  n(r[p.iT]),
+        e:      n(r[p.iE]),
+        per1000:n(r[p.iP]),
+      })),
+      nodig2030:     n(r[46]),
+      extraNodig2030:n(r[47]),
+    });
+  }
+}
+
+function parseKerncijfers(wb) {
+  const sheet = wb.Sheets['KERNCIJFERS'];
+  if (!sheet) return;
+  const rows  = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+  kerncijfers = {};
+  const MAP   = { 'VL':'Vlaanderen','ANT':'Antwerpen','LIM':'Limburg','O-VL':'Oost-Vlaanderen','VL-B':'Vlaams-Brabant','W-VL':'West-Vlaanderen' };
+  let region  = null;
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r) continue;
+    if (r[0] && MAP[r[0]]) { region = MAP[r[0]]; if (!kerncijfers[region]) kerncijfers[region] = {}; }
+    if (!region || !r[1]) continue;
+    const vals = [r[2],r[3],r[4],r[5],r[6],r[7],r[8],r[9]].map(n);
+    if (r[1].includes("Aantal deelauto's") && !r[1].includes('e-')) kerncijfers[region].total       = vals;
+    else if (r[1].includes("Aantal e-deelauto"))                     kerncijfers[region].eTotaal     = vals;
+    else if (r[1].includes('Aantal gem.'))                           kerncijfers[region].gemeentenM1 = vals;
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// FILTERS & INIT
+// ═══════════════════════════════════════════════════
+function buildFilters() {
+  const provSelect = document.getElementById('selProvincie');
+  provSelect.innerHTML = '<option value="">Heel Vlaanderen</option>';
+  PROV_FULL.forEach(p => {
+    const o = document.createElement('option'); o.value = p; o.textContent = p;
+    provSelect.appendChild(o);
+  });
+
+  const perSelect = document.getElementById('selPeriode');
+  perSelect.innerHTML = '';
+  PERIODS.forEach((p, i) => {
+    const o = document.createElement('option'); o.value = i; o.textContent = p.label;
+    if (i === PERIODS.length - 1) o.selected = true;
+    perSelect.appendChild(o);
+  });
+
+  provSelect.addEventListener('change', () => { state.provincie = provSelect.value; refresh(); });
+  perSelect.addEventListener('change', () => { state.periodeIdx = +perSelect.value; refresh(); });
+  document.getElementById('tableSearch').addEventListener('input', renderTable);
+}
+
+function showDashboard() {
+  document.getElementById('uploadScreen').style.display = 'none';
+  document.getElementById('dashboard').style.display    = 'block';
+  state.periodeIdx = PERIODS.length - 1;
+  state.provincie  = '';
+  drawTrendChart();
+  drawGapChart();
+  drawLekpBars();
+  refresh();
+}
+
+function refresh() {
+  updateKPIs();
+  updateProvChart();
+  renderTable();
+  document.getElementById('headerBadge').textContent =
+    PERIODS[state.periodeIdx].label + ' · ' + (state.provincie || 'Heel Vlaanderen');
+  document.getElementById('provSub').textContent = PERIODS[state.periodeIdx].label;
+}
+
+function filtered() {
+  if (!state.provincie) return gemeenten;
+  return gemeenten.filter(g => g.provincie === state.provincie);
+}
+
+// ═══════════════════════════════════════════════════
+// KPI CARDS
+// ═══════════════════════════════════════════════════
+function updateKPIs() {
+  const data = filtered();
+  const pi   = state.periodeIdx;
+  const pLabel = PERIODS[pi].label;
+
+  const tot  = data.reduce((s, g) => s + g.perioden[pi].total, 0);
+  const eTot = data.reduce((s, g) => s + g.perioden[pi].e,     0);
+  const actief = data.filter(g => g.perioden[pi].total > 0).length;
+  const inw  = data.reduce((s, g) => s + (g.inwoners[2025] || g.inwoners[2024] || 0), 0);
+  const dicht = inw > 0 ? tot / inw * 1000 : 0;
+
+  document.getElementById('kv1').textContent = tot.toLocaleString('nl-BE');
+  document.getElementById('ks1').textContent = pLabel + (state.provincie ? ' · ' + state.provincie : '');
+  document.getElementById('kv2').textContent = tot > 0 ? Math.round(eTot / tot * 100) + '%' : '–';
+  document.getElementById('kv3').textContent = actief + ' / ' + data.length;
+  document.getElementById('ks3').textContent = data.length > 0 ? Math.round(actief/data.length*100) + '% van gemeenten' : '';
+  document.getElementById('kv4').textContent = dicht.toFixed(2).replace('.', ',');
+
+  // Growth badge vs previous period
+  ['kb1','kb2','kb3','kb4'].forEach(id => document.getElementById(id).innerHTML = '');
+  if (pi > 0) {
+    const prev    = data.reduce((s, g) => s + g.perioden[pi-1].total, 0);
+    const prevE   = data.reduce((s, g) => s + g.perioden[pi-1].e, 0);
+    const prevAct = data.filter(g => g.perioden[pi-1].total > 0).length;
+    const diff    = tot - prev;
+    const pct     = prev > 0 ? diff/prev*100 : 0;
+    const up      = diff >= 0;
+    document.getElementById('kb1').innerHTML = badge(up, `${up?'+':''}${diff.toLocaleString('nl-BE')} (${pct.toFixed(1).replace('.',',')}%)`, PERIODS[pi-1].label);
+
+    const diffE = eTot - prevE;
+    const pctE  = prevE > 0 ? diffE/prevE*100 : 0;
+    document.getElementById('kb2').innerHTML = badge(diffE >= 0, `${diffE>=0?'+':''}${diffE} (${pctE.toFixed(1).replace('.',',')}%)`, PERIODS[pi-1].label);
+
+    const diffA = actief - prevAct;
+    document.getElementById('kb3').innerHTML = badge(diffA >= 0, `${diffA>=0?'+':''}${diffA} gemeente${Math.abs(diffA)!==1?'n':''}`, PERIODS[pi-1].label);
+  }
+}
+
+function badge(up, txt, from) {
+  const cls = up ? 'badge-up' : 'badge-down';
+  const arr = up ? '▲' : '▼';
+  return `<span class="kpi-badge ${cls}" title="vs ${from}">${arr} ${txt}</span>`;
+}
+
+// ═══════════════════════════════════════════════════
+// TREND CHART
+// ═══════════════════════════════════════════════════
+function drawTrendChart() {
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  if (charts.trend) { charts.trend.destroy(); }
+
+  // Use kerncijfers if available, otherwise aggregate
+  const kVL = kerncijfers['Vlaanderen'];
+  const labels   = PERIODS.map(p => p.label);
+  const totData  = kVL?.total   || PERIODS.map((_,i) => gemeenten.reduce((s,g)=>s+g.perioden[i].total,0));
+  const eData    = kVL?.eTotaal || PERIODS.map((_,i) => gemeenten.reduce((s,g)=>s+g.perioden[i].e,0));
+
+  document.getElementById('trendSub').textContent = 'Totaal & elektrisch · Heel Vlaanderen';
+
+  charts.trend = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Totaal deelwagens',
+          data:  totData,
+          borderColor: '#00BAFF',
+          backgroundColor: 'rgba(0,186,255,0.1)',
+          borderWidth: 2.5,
+          fill: true,
+          tension: 0.4,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          pointBackgroundColor: '#00BAFF',
+        },
+        {
+          label: 'Waarvan elektrisch',
+          data:  eData,
+          borderColor: '#023e8a',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          borderDash: [5,3],
+          fill: false,
+          tension: 0.4,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointBackgroundColor: '#023e8a',
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12, padding: 16 } },
+        tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${c.raw.toLocaleString('nl-BE')}` } }
+      },
+      scales: {
+        y: { beginAtZero: false, grid: { color: '#f0f0f0' }, ticks: { font: { size: 11 } } },
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════
+// PROVINCE CHART
+// ═══════════════════════════════════════════════════
+function updateProvChart() {
+  const pi  = state.periodeIdx;
+  const ctx = document.getElementById('provChart').getContext('2d');
+  if (charts.prov) charts.prov.destroy();
+
+  const totals = PROV_FULL.map(p => gemeenten.filter(g=>g.provincie===p).reduce((s,g)=>s+g.perioden[pi].total,0));
+  const eItems = PROV_FULL.map(p => gemeenten.filter(g=>g.provincie===p).reduce((s,g)=>s+g.perioden[pi].e,0));
+  const nonE   = totals.map((t,i) => t - eItems[i]);
+
+  charts.prov = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: PROV_SHORT,
+      datasets: [
+        { label: 'Niet-elektrisch', data: nonE,   backgroundColor: 'rgba(0,186,255,0.35)', borderRadius: 4 },
+        { label: 'Elektrisch',      data: eItems,  backgroundColor: '#00BAFF',              borderRadius: 4 },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index' },
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12, padding: 16 } },
+        tooltip: {
+          callbacks: {
+            label: c => ` ${c.dataset.label}: ${c.raw.toLocaleString('nl-BE')}`,
+            afterBody: items => {
+              const tot = items.reduce((s,i) => s + i.raw, 0);
+              return `  Totaal: ${tot.toLocaleString('nl-BE')}`;
+            }
+          }
+        }
+      },
+      scales: {
+        y: { stacked: true, beginAtZero: true, grid: { color: '#f0f0f0' }, ticks: { font: { size: 11 } } },
+        x: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════
+// LEKP 2030 BARS
+// ═══════════════════════════════════════════════════
+function drawLekpBars() {
+  const container = document.getElementById('lekpBars');
+  const DEC24_IDX = 5; // Dec 2024
+
+  const regions = [
+    { name: 'Heel Vlaanderen', filter: null },
+    ...PROV_FULL.map(p => ({ name: p, filter: p }))
+  ];
+
+  container.innerHTML = '';
+
+  regions.forEach(({ name, filter }) => {
+    const data    = filter ? gemeenten.filter(g => g.provincie === filter) : gemeenten;
+    const current = data.reduce((s, g) => s + g.perioden[DEC24_IDX].total, 0);
+    const needed  = data.reduce((s, g) => s + g.nodig2030, 0);
+    if (needed === 0) return;
+
+    const pct      = Math.min(Math.round(current / needed * 100), 100);
+    const extra    = data.reduce((s, g) => s + Math.max(0, g.extraNodig2030), 0);
+    const color    = pct >= 80 ? 'var(--success)' : pct >= 55 ? 'var(--primary)' : pct >= 35 ? 'var(--warning)' : 'var(--danger)';
+
+    container.innerHTML += `
+      <div class="lekp-item">
+        <div class="lekp-row">
+          <span class="lekp-name">${name}</span>
+          <span class="lekp-pct" style="color:${color}">${pct}%</span>
+        </div>
+        <div class="bar-bg">
+          <div class="bar-fill" style="width:${pct}%;background:${color}"></div>
+        </div>
+        <div class="lekp-detail">
+          ${current.toLocaleString('nl-BE')} van ${needed.toLocaleString('nl-BE')} · nog <strong>${extra.toLocaleString('nl-BE')}</strong> nodig
+        </div>
+      </div>`;
+  });
+}
+
+// ═══════════════════════════════════════════════════
+// GAP CHART
+// ═══════════════════════════════════════════════════
+function drawGapChart() {
+  const top10 = gemeenten
+    .filter(g => g.extraNodig2030 > 0)
+    .sort((a, b) => b.extraNodig2030 - a.extraNodig2030)
+    .slice(0, 10);
+
+  const ctx = document.getElementById('gapChart').getContext('2d');
+  if (charts.gap) charts.gap.destroy();
+
+  charts.gap = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: top10.map(g => g.gemeente),
+      datasets: [{
+        label: 'Extra deelwagens nodig',
+        data:  top10.map(g => g.extraNodig2030),
+        backgroundColor: top10.map(g => PROV_COLORS[g.provincie] || '#00BAFF'),
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: c => ` ${c.raw.toLocaleString('nl-BE')} extra nodig`,
+            afterLabel: c => ` ${top10[c.dataIndex].provincie}`
+          }
+        }
+      },
+      scales: {
+        x: { beginAtZero: true, grid: { color: '#f0f0f0' }, ticks: { font: { size: 11 } } },
+        y: { grid: { display: false }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════
+// TABLE
+// ═══════════════════════════════════════════════════
+function sortBy(col) {
+  if (tableSort.col === col) tableSort.asc = !tableSort.asc;
+  else { tableSort.col = col; tableSort.asc = col === 'gemeente' || col === 'provincie'; }
+  document.querySelectorAll('thead th').forEach(th => {
+    th.classList.remove('sort-active','sort-asc','sort-desc');
+  });
+  const headers = { gemeente:0,provincie:1,inwoners:2,deelwagens:3,eWagens:4,per1000:5,nodig2030:6,gap2030:7 };
+  const idx = headers[col];
+  if (idx !== undefined) {
+    const th = document.querySelectorAll('thead th')[idx];
+    th.classList.add('sort-active', tableSort.asc ? 'sort-asc' : 'sort-desc');
+  }
+  renderTable();
+}
+
+function renderTable() {
+  const pi     = state.periodeIdx;
+  const prov   = state.provincie;
+  const q      = document.getElementById('tableSearch').value.toLowerCase().trim();
+
+  let rows = gemeenten
+    .filter(g => {
+      if (prov && g.provincie !== prov) return false;
+      if (q && !g.gemeente.toLowerCase().includes(q) && !g.provincie.toLowerCase().includes(q)) return false;
+      return true;
+    })
+    .map(g => ({
+      gemeente:  g.gemeente,
+      provincie: g.provincie,
+      inwoners:  g.inwoners[2025] || g.inwoners[2024] || 0,
+      deelwagens:g.perioden[pi].total,
+      eWagens:   g.perioden[pi].e,
+      per1000:   g.perioden[pi].per1000,
+      nodig2030: g.nodig2030,
+      gap2030:   g.extraNodig2030,
+      pct2030:   g.nodig2030 > 0 ? g.perioden[5].total / g.nodig2030 : 1,
+    }));
+
+  const col = tableSort.col;
+  rows.sort((a, b) => {
+    let av = a[col], bv = b[col];
+    if (typeof av === 'string') {
+      const r = av.localeCompare(bv, 'nl');
+      return tableSort.asc ? r : -r;
+    }
+    return tableSort.asc ? av - bv : bv - av;
+  });
+
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = '';
+
+  rows.forEach(r => {
+    const pct     = Math.min(Math.round(r.pct2030 * 100), 100);
+    const barCls  = pct >= 80 ? 'fill-green' : pct >= 55 ? 'fill-blue' : pct >= 35 ? 'fill-orange' : 'fill-red';
+    const gapTxt  = r.gap2030 > 0
+      ? `<span style="color:var(--danger)">+${r.gap2030.toLocaleString('nl-BE')}</span>`
+      : r.gap2030 < 0
+        ? `<span style="color:var(--success)">Op schema</span>`
+        : '–';
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="td-gem">${r.gemeente}</td>
+      <td class="td-prov">${r.provincie}</td>
+      <td class="td-num">${r.inwoners > 0 ? r.inwoners.toLocaleString('nl-BE') : '–'}</td>
+      <td class="td-num"><strong>${r.deelwagens > 0 ? r.deelwagens.toLocaleString('nl-BE') : '0'}</strong></td>
+      <td class="td-num">${r.eWagens}</td>
+      <td class="td-num">${r.per1000 > 0 ? r.per1000.toFixed(2).replace('.',',') : '0,00'}</td>
+      <td class="td-num">${r.nodig2030 > 0 ? r.nodig2030.toLocaleString('nl-BE') : '–'}</td>
+      <td>${gapTxt}</td>
+      <td>
+        <div class="mini-bar-wrap">
+          <div class="mini-bar"><div class="mini-fill ${barCls}" style="width:${pct}%"></div></div>
+          <span class="mini-pct">${r.nodig2030 > 0 ? pct+'%' : '–'}</span>
+        </div>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('tableCount').textContent =
+    `${rows.length} gemeente${rows.length !== 1 ? 'n' : ''} weergegeven`;
+}
+</script>
+</body>
+</html>
